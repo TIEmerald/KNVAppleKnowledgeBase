@@ -118,3 +118,19 @@ typedef CF_ENUM(SInt32, CFRunLoopRunResult) {
 ```
 >It is possible to run a run loop recursively. In other words, you can call CFRunLoopRun, CFRunLoopRunInMode, or any of the NSRunLoop methods for starting the run loop from within the handler routine of an input source or timer. When doing so, you can use any mode you want to run the nested run loop, including the mode in use by the outer run loop
 - **TODO:** Not very sure about the deatils of this part. From my understanding, CFRunLoopRun or CFRunLoopRunInMode could keep run current run loop (for one full circle of current run loop?). And we could add events to the Run Loop, and then keep call the method to run that Run Loop, until it finished or stopped, the we could release the resources.
+
+## Existing the Run Loop
+>There are two ways to make a run loop exit before it has processed an event:
+>- Configure the run loop to run with a timeout value.
+>- Tell the run loop to stop.
+
+>Using a timeout value is certainly preferred, if you can manage it. Specifying a timeout value lets the run loop finish all of its normal processing, including delivering notifications to run loop observers, before exiting.
+
+>Stopping the run loop explicitly with the CFRunLoopStop function produces a result similar to a timeout. The run loop sends out any remaining run-loop notifications and then exits. The difference is that you can use this technique on run loops you started unconditionally.
+
+>Although removing a run loop’s input sources and timers may also cause the run loop to exit, this is **NOT** a reliable way to stop a run loop. Some system routines add input sources to a run loop to handle needed events. Because your code might not be aware of these input sources, it would be unable to remove them, which would prevent the run loop from exiting.
+
+## Thread Safety and Run Loop Objects
+>Thread safety varies depending on which API you are using to manipulate your run loop. The functions in Core Foundation are generally thread-safe and can be called from any thread. **If you are performing operations that alter the configuration of the run loop, however, it is still good practice to do so from the thread that owns the run loop whenever possible**.
+
+>The Cocoa **NSRunLoop** class is **NOT** as inherently thread safe as its Core Foundation counterpart. If you are using the NSRunLoop class to modify your run loop, you should do so only from the same thread that owns that run loop. Adding an input source or timer to a run loop belonging to a different thread could cause your code to crash or behave in an unexpected way.
