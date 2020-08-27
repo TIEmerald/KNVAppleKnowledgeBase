@@ -1,6 +1,22 @@
 # Run Loops
-### References
+## References
 [Apple Threading Programming Guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/RunLoopManagement/RunLoopManagement.html)
+
+----
+- [What is "Run Loops"](#what-is--run-loops-)
+- [Anatomy of a Run Loop](#anatomy-of-a-run-loop)
+  * [Run Loop Modes](#run-loop-modes)
+  * [Input Sources](#input-sources)
+    + [Port-Based Sources](#port-based-sources)
+    + [Cocoa Perform Selector Sources](#cocoa-perform-selector-sources)
+  * [Timer Sources](#timer-sources)
+  * [Run Loop Observers](#run-loop-observers)
+- [The Run Loop Sequence of Events](#the-run-loop-sequence-of-events)
+- [When Would You Use a Run Loop?](#when-would-you-use-a-run-loop-)
+
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
+----
 
 ## What is "Run Loops"
 >Run loops are part of the fundamental infrastructure associated with threads. A run loop is an event processing loop that you use to schedule work and coordinate the receipt of incoming events. The purpose of a run loop is to keep your thread busy when there is work to do and put your thread to sleep when there is none.
@@ -11,6 +27,7 @@ From what I understand
 - Run Loop could ensure the events passed into threads could be proceed.
 - Unless it's a secondary thread, every threads will manage a run loop for themselves automatically.
 
+----
 ## Anatomy of a Run Loop
 **TODO:** Not very sure what is this mean, yet... might need to come back to this topic after I go through th document.
 >A run loop is very much like its name sounds. It is a loop your thread enters and uses to run event handlers in response to incoming events. Your code provides the control statements used to implement the actual loop portion of the run loop—in other words, your code provides the while or for loop that drives the run loop. Within your loop, you use a run loop object to "run” the event-processing code that receives events and calls the installed handlers.
@@ -116,7 +133,8 @@ Observers are just give developer chances to monitor the run loops, or monitor t
 
 >Similar to timers, run-loop observers can be used once or repeatedly. A one-shot observer removes itself from the run loop after it fires, while a repeating observer remains attached. You specify whether an observer runs once or repeatedly when you create it.
 
-### The Run Loop Sequence of Events
+----
+## The Run Loop Sequence of Events
 Because the content of this section is very essential to help us understand the workflow (or lifecycle) of Run Loops, I copied all content from the referrence.
 
 >Each time you run it, your thread’s run loop processes pending events and generates notifications for any attached observers. The order in which it does this is very specific and is as follows
@@ -148,3 +166,15 @@ Because the content of this section is very essential to help us understand the 
 >A run loop can be explicitly woken up using the run loop object. Other events may also cause the run loop to be woken up. For example, adding another non-port-based input source wakes up the run loop so that the input source can be processed immediately, rather than waiting until some other event occurs.
 
 - When will Run Loop wake up.
+
+----
+## When Would You Use a Run Loop?
+>**The only time you need to run a run loop explicitly is when you create secondary threads for your application.** The run loop for your application’s main thread is a crucial piece of infrastructure. As a result, the app frameworks provide the code for running the main application loop and start that loop automatically. The run method of UIApplication in iOS (or NSApplication in OS X) starts an application’s main loop as part of the normal startup sequence. If you use the Xcode template projects to create your application, you should **NEVER** have to call these routines explicitly.
+
+>For secondary threads, you need to decide whether a run loop is necessary, and if it is, configure and start it yourself. You do not need to start a thread’s run loop in all cases. For example, if you use a thread to perform some long-running and predetermined task, you can probably avoid starting the run loop. Run loops are intended for situations where you want more interactivity with the thread. For example, you need to start a run loop if you plan to do any of the following:
+>- Use ports or custom input sources to communicate with other threads.
+>- Use timers on the thread.
+>- Use any of the performSelector… methods in a Cocoa application.
+>- Keep the thread around to perform periodic tasks.
+
+>If you do choose to use a run loop, the configuration and setup is straightforward. As with all threaded programming though, you should have a plan for exiting your secondary threads in appropriate situations. It is always better to end a thread cleanly by letting it exit than to force it to terminate.
