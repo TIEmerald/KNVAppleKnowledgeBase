@@ -3,6 +3,17 @@
 [Apple Threading Programming Guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/RunLoopManagement/RunLoopManagement.html)
 
 ----
+- [Getting a Run Loop Object](#getting-a-run-loop-object)
+- [Configuring the Run Loop](#configuring-the-run-loop)
+  * [Create a run loop observer](#create-a-run-loop-observer)
+  * [Create and schedule the timer.](#create-and-schedule-the-timer)
+- [Starting the Run Loop](#starting-the-run-loop)
+- [Existing the Run Loop](#existing-the-run-loop)
+- [Thread Safety and Run Loop Objects](#thread-safety-and-run-loop-objects)
+- [Configuring Run Loop Sources](#configuring-run-loop-sources)
+  * [Defining a Custome Input Source](#defining-a-custome-input-source)
+
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
 ----
 ## Getting a Run Loop Object
@@ -134,3 +145,17 @@ typedef CF_ENUM(SInt32, CFRunLoopRunResult) {
 >Thread safety varies depending on which API you are using to manipulate your run loop. The functions in Core Foundation are generally thread-safe and can be called from any thread. **If you are performing operations that alter the configuration of the run loop, however, it is still good practice to do so from the thread that owns the run loop whenever possible**.
 
 >The Cocoa **NSRunLoop** class is **NOT** as inherently thread safe as its Core Foundation counterpart. If you are using the NSRunLoop class to modify your run loop, you should do so only from the same thread that owns that run loop. Adding an input source or timer to a run loop belonging to a different thread could cause your code to crash or behave in an unexpected way.
+
+## Configuring Run Loop Sources
+### Defining a Custome Input Source
+> Creating a custom input source involves defining the following:
+>- The information you want your input source to process.
+>- A scheduler routine to let interested clients know how to contact your input source.
+>- A handler routine to perform requests sent by any clients.
+>- A cancellation routine to invalidate your input source.
+
+> Because you create a custom input source to process custom information, the actual configuration is designed to be flexible. The scheduler, handler, and cancellation routines are the key routines you almost always need for your custom input source.  Most of the rest of the input source behavior, however, happens outside of those handler routines. For example, it is up to  you to define the mechanism for passing data to your input source and for communicating the presence of your input source to other threads.
+
+![Figure 3-2  Operating a custom input source](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/Art/custominputsource.jpg "Figure 3-2  Operating a custom input source")
+
+>Figure 3-2 shows a sample configuration of a custom input source. In this example, the application’s main thread maintains references to the input source, the custom command buffer for that input source, and the run loop on which the input source is installed. When the main thread has a task it wants to hand off to the worker thread, it posts a command to the command buffer along with any information needed by the worker thread to start the task. (Because both the main thread and the input source of the worker thread have access to the command buffer, that access must be synchronized.) Once the command is posted, the main thread signals the input source and wakes up the worker thread’s run loop. Upon receiving the wake up command, the run loop calls the handler for the input source, which processes the commands found in the command buffer.
