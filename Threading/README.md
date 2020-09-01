@@ -25,3 +25,10 @@
 > You are not required to use a run loop with any threads you create but doing so can provide a better experience for the user. Run loops make it possible to create long-lived threads that use a minimal amount of resources. Because a run loop puts its thread to sleep when there is nothing to do, it eliminates the need for polling, which wastes CPU cycles and prevents the processor itself from sleeping and saving power.
 
 > To configure a run loop, all you have to do is launch your thread, get a reference to the run loop object, install your event handlers, and tell the run loop to run. The infrastructure provided by OS X handles the configuration of the main thread’s run loop for you automatically. If you plan to create long-lived secondary threads, however, you must configure the run loop for those threads yourself.
+
+## Design Tips
+1. **Avoid Creating Threads Explicitly** - Try to use GCD and Operation objects APIs to manage threads instead of manually manage it.
+2. **Keep Your Threads Reasonably Busy** - If you decide to create and manage threads manually, remember that threads consume precious system resources. You should not afraid to terminate threads that are spending most of their time idle.
+> **Important:** Before you start terminating idle threads, you should always record a set of baseline measurements of your applications current performance. After trying your changes, take additional measurements to verify that the changes are actually improving performance, rather than hurting it.
+3. **Avoid Shared Data Structures** - Need try our best to minimize the communication and resources contention among your threads.
+4. **Threads and Your User Interface** - Always handle UI-related events in your application's main thread.
