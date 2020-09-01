@@ -32,3 +32,8 @@
 > **Important:** Before you start terminating idle threads, you should always record a set of baseline measurements of your applications current performance. After trying your changes, take additional measurements to verify that the changes are actually improving performance, rather than hurting it.
 3. **Avoid Shared Data Structures** - Need try our best to minimize the communication and resources contention among your threads.
 4. **Threads and Your User Interface** - Always handle UI-related events in your application's main thread.
+5. **Be Aware of Thread Behaviours at Quick Time** - Normally, while an user quits an application, all detached threads (by default all threads which are not main thread) will be terminated immediately. If you want those works done by detached threads to be finished, you need configure those threads to be non-detached.
+6. **Handle Exceptions** - All un-catched exception in any thread will cause the application be terminated.
+> **Note:** In Cocoa, an NSException object is a self-contained object that can be passed from thread to thread once it has been caught.
+7. **Terminal Your Threads Cleanly** - The best way for a thread to exit is naturally, by letting it reach the end of its main entry point routine.
+8. **Thread Safety in Libraries** - When developing libraries, you must assume that the calling application is multithreaded or could switch to being multithreaded at any time.
