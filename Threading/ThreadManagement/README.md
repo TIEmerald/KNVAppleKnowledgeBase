@@ -171,3 +171,61 @@ Thus, the biggest different between detached threads and joinable threads is onl
 > Any new thread you create has a default priority associated with it. The kernel’s scheduling algorithm takes thread priorities into account when determining which threads to run, with higher priority threads being more likely to run than threads with lower priorities. Higher priorities do not guarantee a specific amount of execution time for your thread, just that it is more likely to be chosen by the scheduler when compared to lower-priority threads.
 
 > **Important:** It is generally a good idea to leave the priorities of your threads at their default values. Increasing the priorities of some threads also increases the likelihood of starvation among lower-priority threads. If your application contains high-priority and low-priority threads that must interact with each other, the starvation of lower-priority threads may block other threads and create performance bottlenecks.
+
+## Writing Your Thread Entry Routine
+### Creating an Autorelease Pool
+> Applications that link in Objective-C frameworks typically must create at least one autorelease pool in each of their threads. If an application uses the managed model - where the application handles the retaining and releasing of objects - the autorelease pool catches any objects that are autoreleased from that thread.
+
+If the application support garbage collection, autorelease pool will not be necessary. But it's fine to use both of them， just while gabage collection is enabled, the autorelease poo will be simply ignored.
+
+> If youre application uses the managed memory model, creating an autorelease pool should be the first thing you do in your thread entry routine. Similarly, destroying this autorelease pool should be the last thing you do in your thread.
+```objective-c
+- (void)myThreadMainRoutine
+{
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; // Top-level pool
+ 
+    // Do thread work here.
+ 
+    [pool release];  // Release the objects in the pool.
+}
+```
+>Because the top-level autorelease pool does not release its objects until the thread exits, long-lived threads should create additional autorelease pools to free objects more frequently. For example, a thread that uses a run loop might create and release an autorelease pool each time through that run loop. Releasing objects more frequently prevents your application’s memory footprint from growing too large, which can lead to performance problems. As with any performance-related behavior though, you should measure the actual performance of your code and tune your use of autorelease pools appropriately
+
+### Setting Up an Exception Handler
+Just be aware of that any uncatched Exception in any thread could cause your application to exit.
+
+### Setting Up a Run Loop
+Threads could run with or without runloop activated.
+>OS X and iOS provide built-in support for implementing run loops in every thread. The app frameworks start the run loop of your application’s main thread automatically. If you create any secondary threads, you must configure the run loop and start it manually
+
+## Terminating a Thread
+The recommended way to exit a thread is to let it exit its entry point routine normally.
+
+Here is any example of how to check for an exit condition during a long job.
+```objective-c
+- (void)threadMainRoutine
+{
+    BOOL moreWorkToDo = YES;
+    BOOL exitNow = NO;
+    NSRunLoop* runLoop = [NSRunLoop currentRunLoop];
+ 
+    // Add the exitNow BOOL to the thread dictionary.
+    NSMutableDictionary* threadDict = [[NSThread currentThread] threadDictionary];
+    [threadDict setValue:[NSNumber numberWithBool:exitNow] forKey:@"ThreadShouldExitNow"];
+ 
+    // Install an input source.
+    [self myInstallCustomInputSource];
+ 
+    while (moreWorkToDo && !exitNow)
+    {
+        // Do one chunk of a larger body of work here.
+        // Change the value of the moreWorkToDo Boolean when done.
+ 
+        // Run the run loop but timeout immediately if the input source isn't waiting to fire.
+        [runLoop runUntilDate:[NSDate date]];
+ 
+        // Check to see if an input source handler changed the exitNow value.
+        exitNow = [[threadDict valueForKey:@"ThreadShouldExitNow"] boolValue];
+    }
+}
+```
