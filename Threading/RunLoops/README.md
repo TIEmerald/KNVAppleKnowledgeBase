@@ -2,6 +2,8 @@
 ## References
 [Apple Threading Programming Guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/RunLoopManagement/RunLoopManagement.html)
 
+[iOS 多线程：『RunLoop』详尽总结](https://bujige.net/blog/iOS-Complete-learning-RunLoop.html)
+
 ----
 - [What is "Run Loops"](#what-is--run-loops-)
 - [Anatomy of a Run Loop](#anatomy-of-a-run-loop)

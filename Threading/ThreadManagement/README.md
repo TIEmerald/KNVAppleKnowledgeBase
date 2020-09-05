@@ -31,6 +31,7 @@ The cost of maintaining a thread contains threa main parts:
 2. **Stack space** - (512KB - secondary thread, 8MB - OS X main thread, 1MB - iOS main thread) - The minimum allowed stack size for secondary threads is 16 KB and the stack size must be a multiple of 4 KB (**configurable**). The space for this memory is set aside in your process spece at thread creation time.
 3. **Creation time** - (Approximately 90 microseconds) - the time might very greatly depneding on processor load, the speed of the computer and the amount of available system and program memory.
 
+---
 ## Creating a Thread
 ### Using NSThread
 ```objective-c
@@ -43,6 +44,21 @@ NSThread* myThread = [[NSThread alloc] initWithTarget:self
                                     selector:@selector(myThreadMainMethod:)
                                     object:nil];
 [myThread start];  // Actually create the thread
+
+// General Thread Related Methods.
++ (NSThread *)mainThread; // Get main thread.
+- (BOOL)isMainThread; // Check if it is main thread or not.
++ (NSThread *)currentThread; // Get current thread.
+- (void)setName:(NSString *)name; // Set the name of the thread.
+- (NSString *)name;
+
+// Methods related to the workflow of Thread;
+- (void)start; // Start thread and set a thread to Ready status, if all task finished inside the thread, thread will terminate.
+// These two methods will set current thread to blocked status
++ (void)sleepUntilDate:(NSDate *)date;
++ (void)sleepForTimeInterval:(NSTimeInterval)ti;
+
++ (void)exit; // Force terminate current thread.
 ```
 > **Note:** An alternative to using the initWithTarget:selector:object: method is to subclass NSThread and override its main method. You would use the overridden version of this method to implement your thread's main entry point.
 
@@ -91,18 +107,100 @@ void LaunchThread()
     }
 }
 
-pthread_create() - create a thread.
-pthread_exist() - end current thread.
-pthread_cancel(pthread_t) - sends a cancellation request to the thread.
-pthread_join() - block currrent thread, until another thread terminated
-pthread_kill(pthread_t, int sig) - send a signal sig to thread. If sig is 0, then no signal is sent, but error checking is still performed.
+pthread_create() // create a thread.
+pthread_exist() // end current thread.
+pthread_cancel(pthread_t) // sends a cancellation request to the thread.
+pthread_join() // block currrent thread, until another thread terminated
+pthread_kill(pthread_t, int sig) // send a signal sig to thread. If sig is 0, then no signal is sent, but error checking is still performed.
 ```
 > If you add the code from the preceding listing to one of your source files and call the LaunchThread function, it would create a new detached thread in your application. Of course, new threads created using this code would not do anything useful. The threads would launch and almost immediately exit. To make things more interesting, you would need to add code to the PosixThreadMainRoutine function to do some actual work. To ensure that a thread knows what work to do, you can pass it a pointer to some data at creation time. You pass this pointer as the last parameter of the pthread_create function.
 
 ### Using NSObject to Spawn a Thread
 > In iOS and OS X v10.5 and later, all objects have the ability to spawn a new thread and use it to execute one of their methods. The performSelectorInBackground:withObject: method creates a new detached thread and uses the specified method as the entry point for the new thread.
 
-### Using POSIX Threads in a Cocoa Application
+```objective-c
+// Perform Selector on Main Thread
+- (void)performSelectorOnMainThread:(SEL)aSelector withObject:(id)arg waitUntilDone:(BOOL)wait;
+- (void)performSelectorOnMainThread:(SEL)aSelector withObject:(id)arg waitUntilDone:(BOOL)wait modes:(NSArray<NSString *> *)array;
+
+// Perform Selector on a specific thread
+- (void)performSelector:(SEL)aSelector onThread:(NSThread *)thr withObject:(id)arg waitUntilDone:(BOOL)wait modes:(NSArray *)array NS_AVAILABLE(10_5, 2_0);
+- (void)performSelector:(SEL)aSelector onThread:(NSThread *)thr withObject:(id)arg waitUntilDone:(BOOL)wait NS_AVAILABLE(10_5, 2_0);
+
+// Perfomr Selector on current thread
+- (id)performSelector:(SEL)aSelector;
+- (id)performSelector:(SEL)aSelector withObject:(id)object;
+- (id)performSelector:(SEL)aSelector withObject:(id)object1 withObject:(id)object2;
+```
+
+A very simple example of how to use these methods:
+```objective-c
+- (void)downloadImageOnSubThread {
+    [NSThread detachNewThreadSelector:@selector(downloadImage) toTarget:self withObject:nil];
+}
+
+- (void)downloadImage {
+    NSLog(@"current thread -- %@", [NSThread currentThread]);
+    
+    // 1. Get imageUrl
+    NSURL *imageUrl = [NSURL URLWithString:@"https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/ProgrammingWithObjectiveC/Art/programflow1.png"];
+    
+    // 2. Download image from imageUrl
+    NSData *imageData = [NSData dataWithContentsOfURL:imageUrl];
+    UIImage *image = [UIImage imageWithData:imageData];
+    
+    // 3. update UI in mainthread
+    [self performSelectorOnMainThread:@selector(refreshOnMainThread:) withObject:image waitUntilDone:YES];
+}
+
+- (void)refreshOnMainThread:(UIImage *)image {
+    self.imageView.image = image;
+}
+```
+
+### Furhter about Threads
+#### About Thread Safe
+> Thread safety is a computer programming concept applicable in the context of multi-threaded programs. A piece of code is thread-safe if it functions correctly during simultaneous execution by multiple threads. In particular, it must satisfy the need for multiple threads to access the same shared data, and the need for a shared piece of data to be accessed by only one thread at any given time.
+
+If all threads only read a global variable but not write it, we could think this global variable is thread-safe. 
+If there are multiple threads would perform write action to a global variable, we need to concern about thread synchronization - the easiest way to achieve it are locks.
+
+Here are a simple example of hwo to achieve thread safety with @synchronized
+```objective-c
+- (void)initBankAccountStatus {
+    // 1. There is a shared back account with $50 remaining
+    self.moneyInBankAccount = 50;
+
+    // 2. Marry could withdraw money from the account
+    self.moneyWithdrawBehaviour1 = [[NSThread alloc]initWithTarget:self selector:@selector(withdrawOneDollar) object:nil];
+    self.moneyWithdrawBehaviour1.name = @"Marry";
+
+    // 3. John could withdraw money from the account
+    self.moneyWithdrawBehaviour2 = [[NSThread alloc]initWithTarget:self selector:@selector(withdrawOneDollar) object:nil];
+    self.moneyWithdrawBehaviour2.name = @"John";
+
+    // 4. Start withdraw
+    [self.moneyWithdrawBehaviour1 start];
+    [self.moneyWithdrawBehaviour2 start];
+}
+
+- (void)withdrawOneDollar {
+    while (true) {
+        @synchronized(self) { // This is an pthread_mutex_t
+            if (self.moneyInBankAccount > 0) {
+                self.moneyInBankAccount --;
+                NSLog(@"%@", [NSString stringWithFormat:@"Remaining Amount: %ld, %@ withdrawed $1", self.ticketSurplusCount, [NSThread currentThread].name]);
+                [NSThread sleepForTimeInterval:0.2];
+            } else {
+                NSLog(@"No money remained in the account.")
+                break;
+            }
+        }
+    }
+}
+```
+
+#### Using POSIX Threads in a Cocoa Application
 1. **Protecting the Cocoa Frameworks** - Locks and other internal synchronization inside Cocoa frameworks might failed to be notified, if you create multithread with POSIX Threads.
 > To let Cocoa know that you intend to use multiple threads, all you have to do is spawn a single thread using the NSThread class and let that thread immediately exit. Your thread entry point need not do anything. Just the act of spawning a thread using NSThread is enough to ensure that the locks needed by the Cocoa frameworks are put in place.
 
@@ -110,6 +208,7 @@ pthread_kill(pthread_t, int sig) - send a signal sig to thread. If sig is 0, the
 
 2. **Mixing POSIX and Cocoa Locks** - Using a mixture of POSIX and Cocoa locks inside the same application is safe. But need to ensure you use the correct interface to create and manipulate that lock.
 
+---
 ## Configuring Thread Attributes
 ### Configure the stack size of a Thread
 ### Configure THread-Local Storage
@@ -200,6 +299,7 @@ Thus, the biggest different between detached threads and joinable threads is onl
 
 > **Important:** It is generally a good idea to leave the priorities of your threads at their default values. Increasing the priorities of some threads also increases the likelihood of starvation among lower-priority threads. If your application contains high-priority and low-priority threads that must interact with each other, the starvation of lower-priority threads may block other threads and create performance bottlenecks.
 
+---
 ## Writing Your Thread Entry Routine
 ### Creating an Autorelease Pool
 > Applications that link in Objective-C frameworks typically must create at least one autorelease pool in each of their threads. If an application uses the managed model - where the application handles the retaining and releasing of objects - the autorelease pool catches any objects that are autoreleased from that thread.
@@ -226,8 +326,9 @@ Just be aware of that any uncatched Exception in any thread could cause your app
 Threads could run with or without runloop activated.
 >OS X and iOS provide built-in support for implementing run loops in every thread. The app frameworks start the run loop of your application’s main thread automatically. If you create any secondary threads, you must configure the run loop and start it manually
 
+---
 ## Terminating a Thread
-The recommended way to exit a thread is to let it exit its entry point routine normally.
+The recommended way to exit a thread is to let it exit its entry point routine normally. Eventhrough there are methods to force terminal threads.
 
 Here is any example of how to check for an exit condition during a long job.
 ```objective-c
