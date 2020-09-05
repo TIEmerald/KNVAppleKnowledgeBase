@@ -2,6 +2,8 @@
 ## References
 [Apple Threading Programming Guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/CreatingThreads/CreatingThreads.html#//apple_ref/doc/uid/10000057i-CH15-SW2)
 
+[iOS 多线程：『pthread、NSThread』详尽总结](https://bujige.net/blog/iOS-Complete-learning-pthread-and-NSThread.html)
+
 ----
 - [Thread Costs](#thread-costs)
 - [Creating a Thread](#creating-a-thread)
@@ -45,6 +47,10 @@ NSThread* myThread = [[NSThread alloc] initWithTarget:self
 > **Note:** An alternative to using the initWithTarget:selector:object: method is to subclass NSThread and override its main method. You would use the overridden version of this method to implement your thread's main entry point.
 
 ### Using POSIX Threads
+POSIX (Portable Operating System Interface) is a set of multiple-thread managing API wrote with C Language. Norammly used in Unix-Lick POSIX System, Windows also have a third party package pthreads-w32.
+
+Normally, we barely use it in iOS development.
+
 ```objective-c
 #include <assert.h>
 #include <pthread.h>
@@ -84,6 +90,12 @@ void LaunchThread()
          // Report an error.
     }
 }
+
+pthread_create() - create a thread.
+pthread_exist() - end current thread.
+pthread_cancel(pthread_t) - sends a cancellation request to the thread.
+pthread_join() - block currrent thread, until another thread terminated
+pthread_kill(pthread_t, int sig) - send a signal sig to thread. If sig is 0, then no signal is sent, but error checking is still performed.
 ```
 > If you add the code from the preceding listing to one of your source files and call the LaunchThread function, it would create a new detached thread in your application. Of course, new threads created using this code would not do anything useful. The threads would launch and almost immediately exit. To make things more interesting, you would need to add code to the PosixThreadMainRoutine function to do some actual work. To ensure that a thread knows what work to do, you can pass it a pointer to some data at creation time. You pass this pointer as the last parameter of the pthread_create function.
 

@@ -21,7 +21,8 @@
 >- The term process is used to refer to a running executable, which can encompass multiple threads.
 >- The term task is used to refer to the abstract concept of work that needs to be performed.
 
-## Somethings about Threads
+## Status of Threads
+![Status Lifecyle of Threads](status_of_threads.png "Status Lifecyle of Threads")
 >At the application level, all threads behave in essentially the same way as on other platforms. After starting a thread, the thread runs in one of three main states: running, ready, or blocked. If a thread is not currently running, it is either blocked and waiting for input or it is ready to run but not scheduled to do so yet. The thread continues moving back and forth among these states until it finally exits and moves to the terminated state.
 
 >When you create a new thread, you must specify an entry-point function (or an entry-point method in the case of Cocoa threads) for that thread. This entry-point function constitutes the code you want to run on the thread. When the function returns, or when you terminate the thread explicitly, the thread stops permanently and is reclaimed by the system. Because threads are relatively expensive to create in terms of memory and time, it is therefore recommended that your entry point function do a significant amount of work or set up a run loop to allow for recurring work to be performed.
