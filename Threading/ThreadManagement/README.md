@@ -67,7 +67,7 @@ POSIX (Portable Operating System Interface) is a set of multiple-thread managing
 
 Normally, we barely use it in iOS development.
 
-```objective-c
+```c++
 #include <assert.h>
 #include <pthread.h>
  
@@ -107,6 +107,8 @@ void LaunchThread()
     }
 }
 
+pthread_main_thread_np() // Get main thread.
+pthread_self() // Get current thread.
 pthread_create() // create a thread.
 pthread_exist() // end current thread.
 pthread_cancel(pthread_t) // sends a cancellation request to the thread.

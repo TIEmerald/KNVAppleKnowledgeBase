@@ -2,6 +2,8 @@
 ## References
 [Apple Threading Programming Guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/RunLoopManagement/RunLoopManagement.html)
 
+[深入理解RunLoop](https://blog.ibireme.com/2015/05/18/runloop/)
+
 ----
 - [Getting a Run Loop Object](#getting-a-run-loop-object)
 - [Configuring the Run Loop](#configuring-the-run-loop)
@@ -16,7 +18,117 @@
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
 ----
+## RunLoop related Classes
+In OSX/iOS System, there are two Classes supporting Run Loop: NSRunLoop and CFRunLoopRef
+- CFRunLoopRef is inside CoreFoundation framework, it provided APIs purely built on C functions, all APIs are thread safe. All codes of CFRunLoopRef are open source, you could download the code from [http://opensource.apple.com/tarballs/CF/](http://opensource.apple.com/tarballs/CF/).
+- NSRunLoop is built based on CFRunLoopRef, provided APIs for NSObjects, but those APIs are not thread safe, thus you should only manage NSRunLoop inside its own thread.
+
+Thus, in order to understand how Run Loop works inside OSX/iOS System, we just need to understand how CFRunLoopRef works.
+
+(P.S. after Swift become opensource, apple provided another version of CoreFoundation accross multiple platforms: [https://github.com/apple/swift-corelibs-foundation/](https://github.com/apple/swift-corelibs-foundation/))
+
+### RunLoop inside CoreFoundation
+There are five classes related to RunLoop inside CoreFoundation: CFRunLoopRef, CFRunLoopModeRef, CFRunLoopSourceRef,CFRunLoopTimerRef and CFRunLoopObserverRef. We could refer following diagram to give a brief understanding of the relationship of these classes.
+
+![Relationship of RunLoop Classes](relationship_of_runloop_classes.png "Relationship of RunLoop Classes")
+
+One RunLoop Object contains several Modes, and for every modes, there are several Source/Timer/Observer assigned to that mode. Each time when RunLoop Object performing one loop, there will be one mode be choosed, and this mode called as CurrentMode, only Source, Observer and Timer belong to this mode will response to this run.
+
+1. **CFRunLoopSourceRef** - Where event happens, and there are two type of sources -- source0 and source1 -- in every mode
+    - **source0** -  only contains one pointer to the function, but it cannot trigger event happen. In order to trigger this source, user need to call CFRunLoopSourceSignal(source) to makr the source as signaled (the bits of the source to 1,1,1), and then call CFRunLoopWakeUp(runloop) to awake RunLoop, then this source will be performed.
+    - **source1** - contains a mach_port and one pointer to the function, used for the communication with other threads. This source will wake RunLoop automatically.
+2. **CFRunLoopTimerRef** - it is [toll-free bridged](https://developer.apple.com/library/archive/documentation/General/Conceptual/CocoaEncyclopedia/Toll-FreeBridgin/Toll-FreeBridgin.html) with NSTimer. Contains a time range and a pointer to the function. When it is added into RunLoop, RunLoop will register a time. While time reached, RunLoop will awaked to execute that function.
+3. **CFRunLoopObserverRef** - every Observer contains one pointer to the function. While the status of RunLoop changed, Observer will callback this status changes.
+```c++
+typedef CF_OPTIONS(CFOptionFlags, CFRunLoopActivity) {
+    kCFRunLoopEntry         = (1UL << 0), // Will enter a Loop
+    kCFRunLoopBeforeTimers  = (1UL << 1), // Will handle Timer
+    kCFRunLoopBeforeSources = (1UL << 2), // Will handle Source
+    kCFRunLoopBeforeWaiting = (1UL << 5), // Will sleep
+    kCFRunLoopAfterWaiting  = (1UL << 6), // Just Awake
+    kCFRunLoopExit          = (1UL << 7), // Will terminated
+}
+```
+
+All <Source/TImer/Observer> are mode items.
+- An mode item could be added to multiple mode at the same time. But if you add same item into same mode, this item won't work twice.
+- If current mode doesn't contains any item, RunLoop will skip the Loop directly.
+
+### RunLoop Mode
+The the structures of CFRunLoopMode and CFRunLoop show as following:
+```c++
+struct __CFRunLoop {
+    CFRuntimeBase _base;
+    pthread_mutex_t _lock;			/* locked for accessing mode list */
+    __CFPort _wakeUpPort;			// used for CFRunLoopWakeUp 
+    Boolean _unused;
+    volatile _per_run_data *_perRunData;              // reset for runs of the run loop
+    pthread_t _pthread;  // <<<<Every RunLoop is associtated with a pthread_t>>>>
+    uint32_t _winthread;
+    CFMutableSetRef _commonModes; // <<<<Plese notice these two property>>>>
+    CFMutableSetRef _commonModeItems; // <<<<Plese notice these two property>>>>
+    CFRunLoopModeRef _currentMode;
+    CFMutableSetRef _modes;
+    struct _block_item *_blocks_head;
+    struct _block_item *_blocks_tail;
+    CFAbsoluteTime _runTime;
+    CFAbsoluteTime _sleepTime;
+    CFTypeRef _counterpart;
+};
+
+struct __CFRunLoopMode {
+    CFRuntimeBase _base;
+    pthread_mutex_t _lock;	/* must have the run loop locked before locking this */
+    CFStringRef _name;
+    Boolean _stopped;
+    char _padding[3];
+    CFMutableSetRef _sources0;
+    CFMutableSetRef _sources1;
+    CFMutableArrayRef _observers;
+    CFMutableArrayRef _timers;
+    CFMutableDictionaryRef _portToV1SourceMap;
+    __CFPortSet _portSet;
+    CFIndex _observerMask;
+#if USE_DISPATCH_SOURCE_FOR_TIMERS
+    dispatch_source_t _timerSource;
+    dispatch_queue_t _queue;
+    Boolean _timerFired; // set to true by the source when a timer has fired
+    Boolean _dispatchTimerArmed;
+#endif
+#if USE_MK_TIMER_TOO
+    mach_port_t _timerPort;
+    Boolean _mkTimerArmed;
+#endif
+#if DEPLOYMENT_TARGET_WINDOWS
+    DWORD _msgQMask;
+    void (*_msgPump)(void);
+#endif
+    uint64_t _timerSoftDeadline; /* TSR */
+    uint64_t _timerHardDeadline; /* TSR */
+};
+```
+There is one concept called "CommonModes": a ModeName could be added into "commonModes" to mark it as "Common" -- While the content of RunLoop changed, RunLoop will automatically allocate items inside _commonModelItems into all Modes marked as "Common".
+
+**For example:** There are two pre-set modes inside the run loop of main thread: kCFRunLoopDefaultMode(*tracking the default status of the application*) and UITrackingRunLoopMode(*tracking the status while ScrllView is scrolling*). Both of them have already be marked as "Common". If you want to create a timer which could be triggered in both Mode. Instead of adding this timer into both mode directly, you could also add this timer into "commonModelItems".
+
+There are only two public methods to manage Modes inside CFRunLoop:
+```c++
+CFRunLoopAddCommonMode(CFRunLoopRef runloop, CFStringRef modeName);
+CFRunLoopRunInMode(CFStringRef modeName, ...);
+```
+And here are several methods to manage modes inside CFRunLoop:
+```c++
+CFRunLoopAddSource(CFRunLoopRef rl, CFRunLoopSourceRef source, CFStringRef modeName);
+CFRunLoopAddObserver(CFRunLoopRef rl, CFRunLoopObserverRef observer, CFStringRef modeName);
+CFRunLoopAddTimer(CFRunLoopRef rl, CFRunLoopTimerRef timer, CFStringRef mode);
+CFRunLoopRemoveSource(CFRunLoopRef rl, CFRunLoopSourceRef source, CFStringRef modeName);
+CFRunLoopRemoveObserver(CFRunLoopRef rl, CFRunLoopObserverRef observer, CFStringRef modeName);
+CFRunLoopRemoveTimer(CFRunLoopRef rl, CFRunLoopTimerRef timer, CFStringRef mode);
+```
+If the modeName doesn't exist, the RunLoop will create CFRunLoopModeRef for you automatically. And for an RunLoop Object, there is no method to remove CFRunLoopModeRef.
+----
 ## Getting a Run Loop Object
+### How to simply access RunLoops
 1. In a Cocoa application, NSRunLoop Class is use
 ```objective-c
     NSRunLoop* myRunLoop = [NSRunLoop currentRunLoop];
@@ -28,6 +140,49 @@
     /// or
     CFRunLoopRef runLoopRef = CFRunLoopGetCurrent();
 ```
+### Further Discussion
+Apple won't allow user directly create RunLoop, it only provides two functions inside CFRunLoopRef: CFRunLoopGetMain() and CFRunLoopGetCurrent(). We could find out the logics to achieve these two functions similar to the following codes:
+```c++
+/// An global dictionary, <pthread_t : CFRunLoopRef>
+static CFMutableDictionaryRef loopsDic;
+/// An splin lock for accessing run loops
+static CFSpinLock_t loopsLock;
+ 
+/// A method to get a runloop from a thread
+CFRunLoopRef _CFRunLoopGet(pthread_t thread) {
+    OSSpinLockLock(&loopsLock);
+    
+    if (!loopsDic) {
+        // First time calle this method, initial loopsDict and initial an runloop for main thread。
+        loopsDic = CFDictionaryCreateMutable();
+        CFRunLoopRef mainLoop = _CFRunLoopCreate();
+        CFDictionarySetValue(loopsDic, pthread_main_thread_np(), mainLoop);
+    }
+    
+    /// Try to get value from global dictionary。
+    CFRunLoopRef loop = CFDictionaryGetValue(loopsDic, thread));
+    
+    if (!loop) {
+        /// If we cannot gat a loop value, we will create the run loop and store it in loopsDict
+        loop = _CFRunLoopCreate();
+        CFDictionarySetValue(loopsDic, thread, loop);
+        /// Register a callback, if the thread is termianted, we will also terminate related RunLoop。
+        _CFSetTSD(..., thread, loop, __CFFinalizeRunLoop);
+    }
+    
+    OSSpinLockUnLock(&loopsLock);
+    return loop;
+}
+ 
+CFRunLoopRef CFRunLoopGetMain() {
+    return _CFRunLoopGet(pthread_main_thread_np());
+}
+ 
+CFRunLoopRef CFRunLoopGetCurrent() {
+    return _CFRunLoopGet(pthread_self());
+}
+```
+
 ## Configuring the Run Loop
 >Before you run a run loop on a secondary thread, you must add at least one input source or timer to it. If a run loop does not have any sources to monitor, it exits immediately when you try to run it. 
 
