@@ -6,6 +6,8 @@
 
 [深入理解RunLoop](https://blog.ibireme.com/2015/05/18/runloop/)
 
+[Mac OS X and iOS Internals](http://newosxbook.com/MOXiI.pdf)
+
 ----
 - [What is "Run Loops"](#what-is--run-loops-)
 - [Anatomy of a Run Loop](#anatomy-of-a-run-loop)
@@ -176,7 +178,7 @@ int main(int argc, char * argv[]) {
 ```
 ----
 ## The Run Loop Sequence of Events
-Here is the cleaned codes inside CFRunLoopRef which used to achieve Run Loop:
+Here is the cleaned codes inside CFRunLoopRef which used to achieve Run Loop: (you could download the code from [http://opensource.apple.com/tarballs/CF/](http://opensource.apple.com/tarballs/CF/).)
 ```c++
 /// Used for run in default mode
 void CFRunLoopRun(void) {
@@ -234,7 +236,7 @@ int CFRunLoopRunSpecific(runloop, modeName, seconds, stopAfterHandle) {
             /// • a timer time reached
             /// • Runloop time out.
             /// • other manually awake
-            __CFRunLoopServiceMachPort(waitSet, &msg, sizeof(msg_buffer), &livePort, poll ? 0 : TIMEOUT_INFINITY, &voucherState, &voucherCopy);
+            __CFRunLoopServiceMachPort(waitSet, &msg, sizeof(msg_buffer), &livePort, poll ? 0 : TIMEOUT_INFINITY, &voucherState, &voucherCopy); // There is a mach_msg() method call inside.
  
             /// 8. Notify observers, RunLoop just be waked up.
             __CFRunLoopDoObservers(runloop, currentMode, kCFRunLoopAfterWaiting);
@@ -290,6 +292,53 @@ int CFRunLoopRunSpecific(runloop, modeName, seconds, stopAfterHandle) {
 
 ![Events happened inside a RunLoop](events_happened_inside_runloop.png "Events happened inside a RunLoop")
 
+And here is a brief method calls you might could while the application is paused.
+```c++
+{
+    /// 1. Notify Observers that will enter runloop.
+    /// there is a handler to create autoreleasePool: _objc_autoreleasePoolPush();
+    __CFRUNLOOP_IS_CALLING_OUT_TO_AN_OBSERVER_CALLBACK_FUNCTION__(kCFRunLoopEntry);
+    do {
+ 
+        /// 2. Notify Observers that timer will callback
+        __CFRUNLOOP_IS_CALLING_OUT_TO_AN_OBSERVER_CALLBACK_FUNCTION__(kCFRunLoopBeforeTimers);
+        /// 3. Notify Observers that source0 (non-port) will callback。
+        __CFRUNLOOP_IS_CALLING_OUT_TO_AN_OBSERVER_CALLBACK_FUNCTION__(kCFRunLoopBeforeSources);
+        __CFRUNLOOP_IS_CALLING_OUT_TO_A_BLOCK__(block);
+ 
+        /// 4. Fire source0 (non-port)。
+        __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE0_PERFORM_FUNCTION__(source0);
+        __CFRUNLOOP_IS_CALLING_OUT_TO_A_BLOCK__(block);
+ 
+        /// 6. Notify Observers that runloop will sleep
+        /// there is a handler to release and then create new autorelease Pool: _objc_autoreleasePoolPop(); _objc_autoreleasePoolPush();
+        __CFRUNLOOP_IS_CALLING_OUT_TO_AN_OBSERVER_CALLBACK_FUNCTION__(kCFRunLoopBeforeWaiting);
+ 
+        /// 7. sleep to wait msg.
+        mach_msg() -> mach_msg_trap();
+        
+ 
+        /// 8. Notify Observers that runloop will awake
+        __CFRUNLOOP_IS_CALLING_OUT_TO_AN_OBSERVER_CALLBACK_FUNCTION__(kCFRunLoopAfterWaiting);
+ 
+        /// 9. If it's awaked by Timer, will callback timer.
+        __CFRUNLOOP_IS_CALLING_OUT_TO_A_TIMER_CALLBACK_FUNCTION__(timer);
+ 
+        /// 9. If it's awaked by dispatch, we will process blocks passed from methods like dispatch_async 
+        __CFRUNLOOP_IS_SERVICING_THE_MAIN_DISPATCH_QUEUE__(dispatched_block);
+ 
+        /// 9. If it's awaked by Source1(port-based), will handle it
+        __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE1_PERFORM_FUNCTION__(source1);
+ 
+ 
+    } while (...);
+ 
+    /// 10. Notify Observers that runloop will exit
+    /// there is a handler to release autoreleasepool: _objc_autoreleasePoolPop();
+    __CFRUNLOOP_IS_CALLING_OUT_TO_AN_OBSERVER_CALLBACK_FUNCTION__(kCFRunLoopExit);
+}
+```
+
 >Because observer notifications for timer and input sources are delivered before those events actually occur, there may be a gap between the time of the notifications and the time of the actual events. If the timing between these events is critical, you can use the sleep and awake-from-sleep notifications to help you correlate the timing between the actual events.
 - Notifcation time is not exactly the time when event is processing.
 
@@ -299,6 +348,222 @@ int CFRunLoopRunSpecific(runloop, modeName, seconds, stopAfterHandle) {
 >A run loop can be explicitly woken up using the run loop object. Other events may also cause the run loop to be woken up. For example, adding another non-port-based input source wakes up the run loop so that the input source can be processed immediately, rather than waiting until some other event occurs.
 
 - When will Run Loop wake up.
+
+----
+## How RunLoop is achieved in OSX/IOS System
+### OS X and iOS architectural diagram
+Here are two diagramss (from [Mac OS X and iOS Internals](http://newosxbook.com/MOXiI.pdf)) illustrate the architectural of OS X and iOS, right now, I think we just need to be aware of that the Mach part inside Darwin is essetial to make RunLoop works properly. 
+
+![OSX and iOS architectural diagram](osx_&_ios_architectural.png "OSX and iOS architectural diagram")
+![Darwin Architecture](darwin_architecture.png "OSX and iOS architectural diagram")
+
+Inside Mach, all is achieved with objects. But different from other frameworks, the objects inside Mach cannot call method from each other directly. In order to communicate between objects, you have to use a concept called "Message", "Message" is send between two ports of two different objects.
+
+The definition of Mach's message is inside <mach/message.h>
+```c++
+typedef struct {
+  mach_msg_header_t header;
+  mach_msg_body_t body;
+} mach_msg_base_t;
+ 
+typedef struct {
+  mach_msg_bits_t msgh_bits;
+  mach_msg_size_t msgh_size;
+  mach_port_t msgh_remote_port;
+  mach_port_t msgh_local_port;
+  mach_port_name_t msgh_voucher_port;
+  mach_msg_id_t msgh_id;
+} mach_msg_header_t;
+```
+Sending message and receiving message are using the same API:
+```c++
+mach_msg_return_t mach_msg(
+			mach_msg_header_t *msg,
+			mach_msg_option_t option,
+			mach_msg_size_t send_size,
+			mach_msg_size_t rcv_size,
+			mach_port_name_t rcv_name,
+			mach_msg_timeout_t timeout,
+			mach_port_name_t notify);
+```
+Some details are still not clear, yet but in here we could understand the following things:
+1. The mach_msg() is actually called a mach_msg_trap().. If you pause an application under normal status, you could find out the main_thread is staying at mach_msg_trap() method.
+2. In Step 7 above, there is a mech_msg() be called. RunLoop use this function to receive message from other objects, if no port-message was sent, the thread will wait.
+
+----
+## Example of RunLoop in main thread
+If you start an application, and then you could find out the status of the RunLoop inside your main thread will be:
+```c++
+CFRunLoop {
+    current mode = kCFRunLoopDefaultMode
+    common modes = {
+        UITrackingRunLoopMode
+        kCFRunLoopDefaultMode
+    }
+ 
+    common mode items = {
+ 
+        // source0 (manual)
+        CFRunLoopSource {order =-1, {
+            callout = _UIApplicationHandleEventQueue}}
+        CFRunLoopSource {order =-1, {
+            callout = PurpleEventSignalCallback }}
+        CFRunLoopSource {order = 0, {
+            callout = FBSSerialQueueRunLoopSourceHandler}}
+ 
+        // source1 (mach port)
+        CFRunLoopSource {order = 0,  {port = 17923}}
+        CFRunLoopSource {order = 0,  {port = 12039}}
+        CFRunLoopSource {order = 0,  {port = 16647}}
+        CFRunLoopSource {order =-1, {
+            callout = PurpleEventCallback}}
+        CFRunLoopSource {order = 0, {port = 2407,
+            callout = _ZL20notify_port_callbackP12__CFMachPortPvlS1_}}
+        CFRunLoopSource {order = 0, {port = 1c03,
+            callout = __IOHIDEventSystemClientAvailabilityCallback}}
+        CFRunLoopSource {order = 0, {port = 1b03,
+            callout = __IOHIDEventSystemClientQueueCallback}}
+        CFRunLoopSource {order = 1, {port = 1903,
+            callout = __IOMIGMachPortPortCallback}}
+ 
+        // Ovserver
+        CFRunLoopObserver {order = -2147483647, activities = 0x1, // Entry
+            callout = _wrapRunLoopWithAutoreleasePoolHandler}
+        CFRunLoopObserver {order = 0, activities = 0x20,          // BeforeWaiting
+            callout = _UIGestureRecognizerUpdateObserver}
+        CFRunLoopObserver {order = 1999000, activities = 0xa0,    // BeforeWaiting | Exit
+            callout = _afterCACommitHandler}
+        CFRunLoopObserver {order = 2000000, activities = 0xa0,    // BeforeWaiting | Exit
+            callout = _ZN2CA11Transaction17observer_callbackEP19__CFRunLoopObservermPv}
+        CFRunLoopObserver {order = 2147483647, activities = 0xa0, // BeforeWaiting | Exit
+            callout = _wrapRunLoopWithAutoreleasePoolHandler}
+ 
+        // Timer
+        CFRunLoopTimer {firing = No, interval = 3.1536e+09, tolerance = 0,
+            next fire date = 453098071 (-4421.76019 @ 96223387169499),
+            callout = _ZN2CAL14timer_callbackEP16__CFRunLoopTimerPv (QuartzCore.framework)}
+    },
+ 
+    modes ＝ {
+        CFRunLoopMode  {
+            sources0 =  { /* same as 'common mode items' */ },
+            sources1 =  { /* same as 'common mode items' */ },
+            observers = { /* same as 'common mode items' */ },
+            timers =    { /* same as 'common mode items' */ },
+        },
+ 
+        CFRunLoopMode  {
+            sources0 =  { /* same as 'common mode items' */ },
+            sources1 =  { /* same as 'common mode items' */ },
+            observers = { /* same as 'common mode items' */ },
+            timers =    { /* same as 'common mode items' */ },
+        },
+ 
+        CFRunLoopMode  {
+            sources0 = {
+                CFRunLoopSource {order = 0, {
+                    callout = FBSSerialQueueRunLoopSourceHandler}}
+            },
+            sources1 = (null),
+            observers = {
+                CFRunLoopObserver >{activities = 0xa0, order = 2000000,
+                    callout = _ZN2CA11Transaction17observer_callbackEP19__CFRunLoopObservermPv}
+            )},
+            timers = (null),
+        },
+ 
+        CFRunLoopMode  {
+            sources0 = {
+                CFRunLoopSource {order = -1, {
+                    callout = PurpleEventSignalCallback}}
+            },
+            sources1 = {
+                CFRunLoopSource {order = -1, {
+                    callout = PurpleEventCallback}}
+            },
+            observers = (null),
+            timers = (null),
+        },
+        
+        CFRunLoopMode  {
+            sources0 = (null),
+            sources1 = (null),
+            observers = (null),
+            timers = (null),
+        }
+    }
+}
+```
+There are 5 Mode be insert by default:
+1. kCFRunLoopDefaultMode: The default Mode of Application, most time main thread is running inside this Mode.
+2. UITrackingRunLoopMode: Mode for User Interface Tracking.
+3. UIInitializationRunLoopMode: It's the first Mode set up while Application init. It will never used after application finished set-up.
+4. GSEventReceiveRunLoopMode: For accepting internal events.
+5. kCFRunLoopCommonModes: 
+
+We could find more explanation of modes in [here](http://iphonedevwiki.net/index.php/CFRunLoop).
+
+### AutoreleasePool
+After application started, Apple will register two Observer with callback _wrapRunLoopWithAutoreleasePoolHandler.
+- First one is observing kCFRunLoopEntry, the callback will call _objc_autoreleasePoolPush() to create the AutoReleasePool. The order is -2147483647 which is highest, ensure the AutoReleasePool will be created at very beginning.
+- Second one observes kCFRunLoopBeforeWaiting and kCFRunLoopExit, the callback will call _objc_autoreleasePoolPop() and _objc_autoreleasePoolPush() to release old pool and create new one (Exit will only release old pool). This observer has order 2147483647, with lowest priority, ensure the pool will be relesaed after all other callbacks.
+
+Thus, the code insdie mainthread will already be covered with AutoreleasePool, thus developer won't need to creat pool.
+
+### React to Events
+Inside main thread, Apple register a source1 to handle system events, the callback method is __IOHIDEventSystemClientQueueCallback().
+
+Any physical events happened (touch, lock, shake etc). IOKit.framework will generate a IOHIDEvent, and pass it to SpringBoard. Then SpringBoard will filter some events and pass the event to progresss via mach port. Then the registered source1 will trigger callback and call method _UIApplicationHandleEventQueue().
+
+_UIApplicationHandleEventQueue() will wrap IOHIDEvent to UIEvent.
+
+### Gestrure Recognize
+While _UIApplicationHandleEventQueue() recognized a gesture, it will cancel current callback (touchesBegin/Move/End), and then mark the new gesture as ready to process.
+
+There is a registered Observer listening kCFRunLoopBeforeWaiting. And its callback method is _UIGestureRecognizerUpdateObserver() which will get all gesture which is ready to process, and then process the callback of GestureRecognizer.
+
+### UI Updating
+While user operating UI, for example changed Frame, update UIView/CALayer, or called setNeedsLayout/setNeedsDisplay methods. Those UIVIew/CALayer will be marked as ready to process, and it will be recorded in a global container.
+
+There is a registered Observer listening kCFRunLoopBeforeWaiting with callback _ZN2CA11Transaction17observer_callbackEP19__CFRunLoopObservermPv(). This method will go through all UIView/CALayer ready to process, and update UI.
+
+The general process of this method is:
+```c++
+_ZN2CA11Transaction17observer_callbackEP19__CFRunLoopObservermPv()
+    QuartzCore:CA::Transaction::observer_callback:
+        CA::Transaction::commit();
+            CA::Context::commit_transaction();
+                CA::Layer::layout_and_display_if_needed();
+                    CA::Layer::layout_if_needed();
+                        [CALayer layoutSublayers];
+                            [UIView layoutSubviews];
+                    CA::Layer::display_if_needed();
+                        [CALayer display];
+                            [UIView drawRect];
+```
+### Timer
+NSTimer is the same as CFRunLoopTimerRef. After a NSTimer registered into a RunLoop, RunLoop will register the repeated times of the events, such as 10:00, 10:10, 10:20...
+
+In order to reduce the cost, the callback of Timer won't be very accurate, thus there is a property called tolerance inside every Timer.
+
+If Runloop is very busy with a huge task which cause the RunLoop unable to call the Timer Callback in a certain time point, let's say 10:10. Then this callback won't be called, the next callback will be 10:20.
+
+CADisplayLink is using a Timer with same rate as screen refresh rate(not exactly same as NSTimer). If there is a task processed longer than the time interval of screen refreshing rate, then there will be at least one refreshing callback will be skipped, then user will feel interface freezing.
+
+### PerformSelecter
+While user called performSelecter: in NSObject, it will create a timer and then adde into the RunLoop of current thread. Thus if the RunLoop is not running in the thread, the method won't work.
+
+### About GCD
+While method dispatch_async(dispatch_get_main_queue(), block) called, libDispatch will send message to the runloop of main thread. This message will wake up RunLoop and get the block from the message and execute the block inside __CFRUNLOOP_IS_SERVICING_THE_MAIN_DISPATCH_QUEUE__(). But this logic only existed in dispatch to main_thread, if dispatch to other thread, the block will be handled by libDispatch.
+
+### About Network Request
+First of all, here are structures of how iOS handle Network Request
+```c++
+CFSocket // Basical level, only in charge of socket message.
+CFNetwork       ->ASIHttpRequest // Work on CFSocket
+NSURLConnection ->AFNetworking // Work on CFNetwork
+NSURLSession    ->AFNetworking2, Alamofire // It's a new Interface created from iOS7, the base level is using several funcion inside NSURLConnection.
+```
 
 ----
 ## When Would You Use a Run Loop?
