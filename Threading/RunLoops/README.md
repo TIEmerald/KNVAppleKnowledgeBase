@@ -12,9 +12,11 @@
   * [Run Loop Modes](#run-loop-modes)
   * [Input Sources](#input-sources)
     + [Port-Based Sources](#port-based-sources)
+    + [Custom Input Sources](#custom-input-sources)
     + [Cocoa Perform Selector Sources](#cocoa-perform-selector-sources)
   * [Timer Sources](#timer-sources)
   * [Run Loop Observers](#run-loop-observers)
+- [How RunLoop works inside main thread](#how-runloop-works-inside-main-thread)
 - [The Run Loop Sequence of Events](#the-run-loop-sequence-of-events)
 - [When Would You Use a Run Loop?](#when-would-you-use-a-run-loop-)
 

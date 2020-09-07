@@ -5,7 +5,12 @@
 [深入理解RunLoop](https://blog.ibireme.com/2015/05/18/runloop/)
 
 ----
+- [RunLoop related Classes](#runloop-related-classes)
+  * [RunLoop inside CoreFoundation](#runloop-inside-corefoundation)
+  * [RunLoop Mode](#runloop-mode)
 - [Getting a Run Loop Object](#getting-a-run-loop-object)
+  * [How to simply access RunLoops](#how-to-simply-access-runloops)
+  * [Further Discussion](#further-discussion)
 - [Configuring the Run Loop](#configuring-the-run-loop)
   * [Create a run loop observer](#create-a-run-loop-observer)
   * [Create and schedule the timer.](#create-and-schedule-the-timer)
@@ -125,7 +130,9 @@ CFRunLoopRemoveSource(CFRunLoopRef rl, CFRunLoopSourceRef source, CFStringRef mo
 CFRunLoopRemoveObserver(CFRunLoopRef rl, CFRunLoopObserverRef observer, CFStringRef modeName);
 CFRunLoopRemoveTimer(CFRunLoopRef rl, CFRunLoopTimerRef timer, CFStringRef mode);
 ```
+
 If the modeName doesn't exist, the RunLoop will create CFRunLoopModeRef for you automatically. And for an RunLoop Object, there is no method to remove CFRunLoopModeRef.
+
 ----
 ## Getting a Run Loop Object
 ### How to simply access RunLoops
