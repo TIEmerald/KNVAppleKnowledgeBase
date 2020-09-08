@@ -19,8 +19,12 @@
 - [Thread Safety and Run Loop Objects](#thread-safety-and-run-loop-objects)
 - [Configuring Run Loop Sources](#configuring-run-loop-sources)
   * [Defining a Custome Input Source](#defining-a-custome-input-source)
+- [Examples of Threads](#examples-of-threads)
+  * [AFNetworking](#afnetworking)
+  * [AsyncDisplayKit](#asyncdisplaykit)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
 
 ----
 ## RunLoop related Classes
@@ -321,3 +325,42 @@ typedef CF_ENUM(SInt32, CFRunLoopRunResult) {
 ![Figure 3-2  Operating a custom input source](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/Art/custominputsource.jpg "Figure 3-2  Operating a custom input source")
 
 >Figure 3-2 shows a sample configuration of a custom input source. In this example, the application’s main thread maintains references to the input source, the custom command buffer for that input source, and the run loop on which the input source is installed. When the main thread has a task it wants to hand off to the worker thread, it posts a command to the command buffer along with any information needed by the worker thread to start the task. (Because both the main thread and the input source of the worker thread have access to the command buffer, that access must be synchronized.) Once the command is posted, the main thread signals the input source and wakes up the worker thread’s run loop. Upon receiving the wake up command, the run loop calls the handler for the input source, which processes the commands found in the command buffer.
+
+----
+## Examples of Threads
+### AFNetworking
+AFURLConnectionOperation is a class based on NSURLConnection. In order to keep a thread runing listenning to Callback from NSURLConnection, it added a NSMachPort to keep the RunLoop won't exit.
+```objective-c
++ (void)networkRequestThreadEntryPoint:(id)__unused object {
+    @autoreleasepool {
+        [[NSThread currentThread] setName:@"AFNetworking"];
+        NSRunLoop *runLoop = [NSRunLoop currentRunLoop];
+        [runLoop addPort:[NSMachPort port] forMode:NSDefaultRunLoopMode]; /// This NSMachPort is only used for keep RunLoop running.
+        [runLoop run];
+    }
+}
+ 
++ (NSThread *)networkRequestThread {
+    static NSThread *_networkRequestThread = nil;
+    static dispatch_once_t oncePredicate;
+    dispatch_once(&oncePredicate, ^{
+        _networkRequestThread = [[NSThread alloc] initWithTarget:self selector:@selector(networkRequestThreadEntryPoint:) object:nil];
+        [_networkRequestThread start];
+    });
+    return _networkRequestThread;
+}
+
+- (void)start {
+    [self.lock lock];
+    if ([self isCancelled]) {
+        [self performSelector:@selector(cancelConnection) onThread:[[self class] networkRequestThread] withObject:nil waitUntilDone:NO modes:[self.runLoopModes allObjects]]; /// All async methods will process inside this backend thread
+    } else if ([self isReady]) {
+        self.state = AFOperationExecutingState;
+        [self performSelector:@selector(operationDidStart) onThread:[[self class] networkRequestThread] withObject:nil waitUntilDone:NO modes:[self.runLoopModes allObjects]]; /// All async methods will process inside this backend thread
+    }
+    [self.lock unlock];
+}
+```
+
+### AsyncDisplayKit
+**TODO**

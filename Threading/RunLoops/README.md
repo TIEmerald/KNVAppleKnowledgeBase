@@ -20,9 +20,21 @@
   * [Run Loop Observers](#run-loop-observers)
 - [How RunLoop works inside main thread](#how-runloop-works-inside-main-thread)
 - [The Run Loop Sequence of Events](#the-run-loop-sequence-of-events)
+- [How RunLoop is achieved in OSX/IOS System](#how-runloop-is-achieved-in-osx-ios-system)
+  * [OS X and iOS architectural diagram](#os-x-and-ios-architectural-diagram)
+- [Example of RunLoop in main thread](#example-of-runloop-in-main-thread)
+  * [AutoreleasePool](#autoreleasepool)
+  * [React to Events](#react-to-events)
+  * [Gestrure Recognize](#gestrure-recognize)
+  * [UI Updating](#ui-updating)
+  * [Timer](#timer)
+  * [PerformSelecter](#performselecter)
+  * [About GCD](#about-gcd)
+  * [About Network Request](#about-network-request)
 - [When Would You Use a Run Loop?](#when-would-you-use-a-run-loop-)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
 
 ----
 
@@ -564,6 +576,8 @@ CFNetwork       ->ASIHttpRequest // Work on CFSocket
 NSURLConnection ->AFNetworking // Work on CFNetwork
 NSURLSession    ->AFNetworking2, Alamofire // It's a new Interface created from iOS7, the base level is using several funcion inside NSURLConnection.
 ```
+
+![Workflow for NSURLConnection](nsurlconnection_workflow.png "Workflow for NSURLConnection")
 
 ----
 ## When Would You Use a Run Loop?
