@@ -328,6 +328,95 @@ typedef CF_ENUM(SInt32, CFRunLoopRunResult) {
 
 ----
 ## Examples of Threads
+### Example demo how RunLoopMode Works
+Here is a simple example shows how RunLoopMode works in a thread. You just need to set up a scroll view in the application and set its delegate to the view controller.
+```objective-c
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    // Do any additional setup after loading the view.
+    NSTimer *timerA = [NSTimer timerWithTimeInterval:2.0 target:self selector:@selector(runInDefaultMode) userInfo:nil repeats:YES];
+    NSTimer *timerB = [NSTimer timerWithTimeInterval:2.0 target:self selector:@selector(runInUITrakingMode) userInfo:nil repeats:YES];
+    NSTimer *timerC = [NSTimer timerWithTimeInterval:2.0 target:self selector:@selector(runInCommonsMode) userInfo:nil repeats:YES];
+    
+    [[NSRunLoop currentRunLoop] addTimer:timerA forMode:NSDefaultRunLoopMode];
+    [[NSRunLoop currentRunLoop] addTimer:timerB forMode:UITrackingRunLoopMode];
+    [[NSRunLoop currentRunLoop] addTimer:timerC forMode:NSRunLoopCommonModes];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+}
+
+- (void)runInDefaultMode
+{
+    NSLog(@"runInDefaultMode");
+}
+
+- (void)runInUITrakingMode
+{
+    NSLog(@"runInUITrakingMode");
+}
+
+- (void)runInCommonsMode
+{
+    NSLog(@"runInCommonsMode");
+}
+
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView
+{
+    NSLog(@"Start Dragging Scroll View");
+}
+
+- (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate
+{
+    NSLog(@"Did End Dragging Scroll View");
+}
+```
+
+And here is what recorded in the Logs console:
+```
+2020-09-09 20:25:06.306548+0800 Temp Objective C Playground Project[12795:5968360] runInDefaultMode
+2020-09-09 20:25:06.306904+0800 Temp Objective C Playground Project[12795:5968360] runInCommonsMode
+2020-09-09 20:25:08.306598+0800 Temp Objective C Playground Project[12795:5968360] runInDefaultMode
+2020-09-09 20:25:08.306937+0800 Temp Objective C Playground Project[12795:5968360] runInCommonsMode
+2020-09-09 20:25:08.599107+0800 Temp Objective C Playground Project[12795:5968360] Start Dragging Scroll View <<<Here use start to scroll the scroll view.
+2020-09-09 20:25:08.600877+0800 Temp Objective C Playground Project[12795:5968360] runInUITrakingMode
+2020-09-09 20:25:10.306581+0800 Temp Objective C Playground Project[12795:5968360] runInUITrakingMode
+2020-09-09 20:25:10.306798+0800 Temp Objective C Playground Project[12795:5968360] runInCommonsMode
+2020-09-09 20:25:12.307058+0800 Temp Objective C Playground Project[12795:5968360] runInUITrakingMode
+2020-09-09 20:25:12.307297+0800 Temp Objective C Playground Project[12795:5968360] runInCommonsMode
+2020-09-09 20:25:12.355206+0800 Temp Objective C Playground Project[12795:5968360] Did End Dragging Scroll View <<<Here use stop scroll the scroll view.
+2020-09-09 20:25:13.191115+0800 Temp Objective C Playground Project[12795:5968360] runInDefaultMode
+2020-09-09 20:25:14.306709+0800 Temp Objective C Playground Project[12795:5968360] runInDefaultMode
+2020-09-09 20:25:14.306921+0800 Temp Objective C Playground Project[12795:5968360] runInCommonsMode
+```
+
+If you are curious about how is the mode switch to another mode... You could also add an observer in the view controller, and here will be the console logs
+```
+2020-09-09 20:31:53.817757+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopAfterWaiting
+2020-09-09 20:31:53.818097+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopBeforeTimers
+2020-09-09 20:31:53.818298+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopBeforeSources
+2020-09-09 20:31:53.819304+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopBeforeTimers
+2020-09-09 20:31:53.819524+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopBeforeSources
+2020-09-09 20:31:53.820062+0800 Temp Objective C Playground Project[13175:5975806] Start Dragging Scroll View
+2020-09-09 20:31:53.820505+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopBeforeWaiting
+2020-09-09 20:31:53.820878+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopAfterWaiting
+2020-09-09 20:31:53.821079+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopExit <<<< We could ensure that a ui tracking mode is started in here.
+2020-09-09 20:31:53.821296+0800 Temp Objective C Playground Project[13175:5975806] runInUITrakingMode
+2020-09-09 20:31:55.221421+0800 Temp Objective C Playground Project[13175:5975806] runInUITrakingMode
+2020-09-09 20:31:55.221712+0800 Temp Objective C Playground Project[13175:5975806] runInCommonsMode
+2020-09-09 20:31:57.221394+0800 Temp Objective C Playground Project[13175:5975806] runInUITrakingMode
+2020-09-09 20:31:57.221569+0800 Temp Objective C Playground Project[13175:5975806] runInCommonsMode
+2020-09-09 20:31:59.221317+0800 Temp Objective C Playground Project[13175:5975806] runInUITrakingMode
+2020-09-09 20:31:59.221490+0800 Temp Objective C Playground Project[13175:5975806] runInCommonsMode
+2020-09-09 20:32:00.929169+0800 Temp Objective C Playground Project[13175:5975806] Did End Dragging Scroll View
+2020-09-09 20:32:00.929850+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopEntry
+2020-09-09 20:32:00.930149+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopBeforeTimers
+2020-09-09 20:32:00.930438+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopBeforeSources
+2020-09-09 20:32:00.930659+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopBeforeWaiting
+2020-09-09 20:32:00.930887+0800 Temp Objective C Playground Project[13175:5975806] default mode activity = kCFRunLoopAfterWaiting
+```
+
 ### AFNetworking
 AFURLConnectionOperation is a class based on NSURLConnection. In order to keep a thread runing listenning to Callback from NSURLConnection, it added a NSMachPort to keep the RunLoop won't exit.
 ```objective-c
@@ -336,7 +425,7 @@ AFURLConnectionOperation is a class based on NSURLConnection. In order to keep a
         [[NSThread currentThread] setName:@"AFNetworking"];
         NSRunLoop *runLoop = [NSRunLoop currentRunLoop];
         [runLoop addPort:[NSMachPort port] forMode:NSDefaultRunLoopMode]; /// This NSMachPort is only used for keep RunLoop running.
-        [runLoop run];
+        [runLoop run]; <<<<< this will be an endless loop, as there will alwasy be a source1 inside currentMode, and apparently there is no timeout time to this runloop. then if no force quit, this runn loop will always exist.
     }
 }
  
