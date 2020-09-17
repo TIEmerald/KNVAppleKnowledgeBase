@@ -4,6 +4,10 @@
 
 [Advanced Memory Management Programming Guides](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/MemoryMgmt/Articles/MemoryMgmt.html#//apple_ref/doc/uid/10000011-SW1)
 
+[Swift - Automatic Reference Counting](https://docs.swift.org/swift-book/LanguageGuide/AutomaticReferenceCounting.html)
+
+[Transitioning to ARC Release Notes](https://developer.apple.com/library/archive/releasenotes/ObjectiveC/RN-TransitioningToARC/Introduction/Introduction.html)
+
 ----
 - [What Are Threads](#what-are-threads)
 - [Threading Terminology](#threading-terminology)
@@ -16,6 +20,8 @@
 ----
 ## General Information
 - Objective C provides two ways for memory management - MRR (Manual Retain-Release) and ARC (Automatic Reference Counting). Both of them are using "Reference Count" model to achieve memory management. (??? via NSObject-Class inside Foundation framwork, and Runtime Environment ???)
+- Swift uses Automatic Reference Counting (ARC) to track and manage your app's memory usage.
+    - Please be aware of that Reference counting applies only to instances of classes. Structures and enumerations are value types, not reference types, and are not stored and passed by reference.
 
 ## Reference Count
 Reference Count is a simple and efficient way to manage object's lifecycle.
@@ -70,11 +76,27 @@ Simply override Accessor methods, then you won't need to worry about the Memory 
 ## ARC (Automatic Reference Counting)
 ARC is a new feature from Xcode 4.2. The compiler will help us insert the memory manage methods properly, thus user do not need to worry about these methods anymore.
 
+ARC is a **compiler feature** that provides automatic memory management of Objective-C objets
+
+![Difference between MRR and ARC](https://developer.apple.com/library/archive/releasenotes/ObjectiveC/RN-TransitioningToARC/Art/ARC_Illustration.jpg "Difference between MRR and ARC")
+
+> Using ARC in Swift is very similar to the approach described in [Transitioning to ARC Release Notes](https://developer.apple.com/library/archive/releasenotes/ObjectiveC/RN-TransitioningToARC/Introduction/Introduction.html) for using ARC with Objective-C.
+
+> Whenever you assign a class instance to a property, constant, or variable, that property, constant, or variable makes a strong reference to the instance. The reference is called a “strong” reference because it keeps a firm hold on that instance, and does not allow it to be deallocated for as long as that strong reference remains.
+
+### Summary
+- ARC works by adding code at compile time to ensure that objects live as long as necessary, but no longer. Conceptually, it follows the same memory management conventions as manual reference counting by adding the appropriate memory management calls for you.
+- ARC is supported in Xcode 4.2 for OS X v10.6 and v10.7 and for iOS 4 and iOS 5. Weak references are not supprted in OS X v10.6 and iOS 4.
+- “Assigned” instance variables become strong
+
+
 ### Basic Memory Management Rules Under ARC
 The ruls under ARC is very simple, we don't need to retain and release object anymore. Instead, we only need to manage the pointers of objects. If there is any pointer to the object, the object will be reserved in Memory, and while there is no pointer pointing to the object, the object will be auto-released.
 - Cannot use dealloc, retain, release, retainCount, autorelease nor @selector(retain) and @selector(release)
 - Custom dealloc method do not need call [super dealloc] anymore.
 - Cannot naming a method or property with prefix "new"
+- There is no casual casting between id and void *. You must use special casts that tell the compiler about object lifetime.
+- You cannot use NSAutoreleasePool objects, ARC provides @autoreleasepool blocks instead.
 
 ----
 ## Object's Memory Management in Core Foundation 
