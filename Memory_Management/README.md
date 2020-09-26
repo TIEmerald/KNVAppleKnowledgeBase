@@ -9,13 +9,22 @@
 [Transitioning to ARC Release Notes](https://developer.apple.com/library/archive/releasenotes/ObjectiveC/RN-TransitioningToARC/Introduction/Introduction.html)
 
 ----
-- [What Are Threads](#what-are-threads)
-- [Threading Terminology](#threading-terminology)
-- [Somethings about Threads](#somethings-about-threads)
-- [Run Loops](#run-loops)
-- [Design Tips](#design-tips)
+- [General Information](#general-information)
+- [Reference Count](#reference-count)
+- [MRR (Manual Retain-Release)](#mrr--manual-retain-release-)
+  * [Basic Memory Management Rules](#basic-memory-management-rules)
+  * [Autorelease Pool](#autorelease-pool)
+  * [Use Accessor to improve Memory Management](#use-accessor-to-improve-memory-management)
+  * [Issues need to be avoided in Memory Management](#issues-need-to-be-avoided-in-memory-management)
+- [ARC (Automatic Reference Counting)](#arc--automatic-reference-counting-)
+  * [Summary](#summary)
+  * [Basic Memory Management Rules Under ARC](#basic-memory-management-rules-under-arc)
+- [Object's Memory Management in Core Foundation](#object-s-memory-management-in-core-foundation)
+  * [Core Foundation](#core-foundation)
+  * [Toll-free Bridged](#toll-free-bridged)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
 
 ----
 ## General Information
