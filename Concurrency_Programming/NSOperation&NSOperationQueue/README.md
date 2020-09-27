@@ -61,3 +61,64 @@ If we use NSOperation only, we will find out that system will execute those oper
 // 2020-09-27 10:11:18 0---<NSThread: 0x600001a70600>{number = 6, name = (null)}
 // 2020-09-27 10:11:20 1---<NSThread: 0x600001a70600>{number = 6, name = (null)}
 ```
+
+### NSBlockOperation
+- Please be aware that NSBlockOperation has a method called -(void)addExecutionBlock:, which could add extra tasks into Operation object. Those tasks are executed concurrently, thus those tasks will be executed in different thread. Only all tasks finished, then we will treat this Operation is done.
+```objective-c 
+NSLog(@"start---%@", [NSThread currentThread]);
+NSBlockOperation *op = [NSBlockOperation blockOperationWithBlock:^{
+    for (int i = 0; i < 2; i++) {
+        [NSThread sleepForTimeInterval:2];
+        NSLog(@"0-%d---%@", i, [NSThread currentThread]); // If you added a lot of extra tasks, there is no guarantee that this block will be performed in the same thread where [op start] is called.
+    }
+}];
+for (int index = 1; index <= 6; index += 1) {
+    [op addExecutionBlock:^{
+        for (int i = 0; i < 2; i++) {
+            [NSThread sleepForTimeInterval:2];
+            NSLog(@"%d-%d---%@", index, i, [NSThread currentThread]);
+        }
+    }];
+}
+[op start];
+NSLog(@"finished---%@", [NSThread currentThread]);
+
+/// Printed Output
+// 2020-09-27 21:53:58 start---<NSThread: 0x6000037641c0>{number = 1, name = main}
+// 2020-09-27 21:54:00 6-0---<NSThread: 0x600003763600>{number = 8, name = (null)}
+// 2020-09-27 21:54:00 1-0---<NSThread: 0x600003741d80>{number = 4, name = (null)}
+// 2020-09-27 21:54:00 4-0---<NSThread: 0x600003763e80>{number = 3, name = (null)}
+// 2020-09-27 21:54:00 0-0---<NSThread: 0x6000037641c0>{number = 1, name = main}
+// 2020-09-27 21:54:00 3-0---<NSThread: 0x600003749480>{number = 7, name = (null)}
+// 2020-09-27 21:54:00 2-0---<NSThread: 0x600003749500>{number = 5, name = (null)}
+// 2020-09-27 21:54:00 5-0---<NSThread: 0x600003735700>{number = 9, name = (null)}
+// 2020-09-27 21:54:02 0-1---<NSThread: 0x6000037641c0>{number = 1, name = main}
+// 2020-09-27 21:54:02 4-1---<NSThread: 0x600003763e80>{number = 3, name = (null)}
+// 2020-09-27 21:54:02 2-1---<NSThread: 0x600003749500>{number = 5, name = (null)}
+// 2020-09-27 21:54:02 5-1---<NSThread: 0x600003735700>{number = 9, name = (null)}
+// 2020-09-27 21:54:02 6-1---<NSThread: 0x600003763600>{number = 8, name = (null)}
+// 2020-09-27 21:54:02 1-1---<NSThread: 0x600003741d80>{number = 4, name = (null)}
+// 2020-09-27 21:54:02 3-1---<NSThread: 0x600003749480>{number = 7, name = (null)}
+// 2020-09-27 21:54:02 finished---<NSThread: 0x6000037641c0>{number = 1, name = main}
+```
+
+### Customised sub-class of NSOperation
+- If NSInvocationOperation and NSBlockOperation cannot achieve what we want, we could use customized sub-class of NSOperation. Wahta we need is over-write -(void)main or -(void)start to achieve what we want.
+- Normally, over-write -(void)main is easier as we don't need to worry about properties like isExecuting and isFinished.
+```objective-c
+@interface CustomOperation : NSOperation
+@end
+
+@implementation CustomOperation
+
+- (void)main {
+    for (int i = 0; i < 2; i++) {
+        [NSThread sleepForTimeInterval:2];
+        NSLog(@"%d---%@", i, [NSThread currentThread]);
+    }
+}
+@end
+
+CustomOperation *op = [[CustomOperation init] alloc];
+[op start];
+```
