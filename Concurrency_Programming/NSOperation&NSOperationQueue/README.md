@@ -34,7 +34,8 @@ Normally we could simply follow the following steps to achieve multi-threading
 
 If we use NSOperation only, we will find out that system will execute those operation synchronized.
 
-### NSInvocationOperation
+### Using NSOperation
+#### NSInvocationOperation
 - If we use NSInvocationOperation only, we could find out that the operation is executed in current thread. **NO NEW** thread created.
 ```objective-c
 - (void)task1 {
@@ -62,7 +63,7 @@ If we use NSOperation only, we will find out that system will execute those oper
 // 2020-09-27 10:11:20 1---<NSThread: 0x600001a70600>{number = 6, name = (null)}
 ```
 
-### NSBlockOperation
+#### NSBlockOperation
 - Please be aware that NSBlockOperation has a method called -(void)addExecutionBlock:, which could add extra tasks into Operation object. Those tasks are executed concurrently, thus those tasks will be executed in different thread. Only all tasks finished, then we will treat this Operation is done.
 ```objective-c 
 NSLog(@"start---%@", [NSThread currentThread]);
@@ -102,7 +103,7 @@ NSLog(@"finished---%@", [NSThread currentThread]);
 // 2020-09-27 21:54:02 finished---<NSThread: 0x6000037641c0>{number = 1, name = main}
 ```
 
-### Customised sub-class of NSOperation
+#### Customised sub-class of NSOperation
 - If NSInvocationOperation and NSBlockOperation cannot achieve what we want, we could use customized sub-class of NSOperation. Wahta we need is over-write -(void)main or -(void)start to achieve what we want.
 - Normally, over-write -(void)main is easier as we don't need to worry about properties like isExecuting and isFinished.
 ```objective-c
@@ -121,4 +122,64 @@ NSLog(@"finished---%@", [NSThread currentThread]);
 
 CustomOperation *op = [[CustomOperation init] alloc];
 [op start];
+```
+
+### Using NSOperationQueue
+- Only Customsed NSOperationQueue support Concurrency
+- [NSOperationQueue mainQueue] will put every tasks assigned into main thread.
+
+### Put NSOperation into NSOperationQueue
+1. -(void)addOperation:(NSOperation *)op;
+    - Create NSOperation first. While NSOperation is added into NSOperationQueue, a thread is created and that NSOperation will start.
+```objective-c
+- (void)task1 {
+    for (int i = 0; i < 2; i++) {
+        [NSThread sleepForTimeInterval:2];
+        NSLog(@"task1-%d---%@", i, [NSThread currentThread]);
+    }
+}
+
+- (void)task2 {
+    for (int i = 0; i < 2; i++) {
+        [NSThread sleepForTimeInterval:2];
+        NSLog(@"task2-%d---%@", i, [NSThread currentThread]);
+    }
+}
+
+NSInvocationOperation *op1 = [[NSInvocationOperation alloc] initWithTarget:self selector:@selector(task1) object:nil];
+NSInvocationOperation *op2 = [[NSInvocationOperation alloc] initWithTarget:self selector:@selector(task2) object:nil];
+NSBlockOperation *op3 = [NSBlockOperation blockOperationWithBlock:^{
+    for (int i = 0; i < 2; i++) {
+        [NSThread sleepForTimeInterval:2];
+        NSLog(@"task3-%d---%@", i, [NSThread currentThread]);
+    }
+}];
+[op3 addExecutionBlock:^{
+    for (int i = 0; i < 2; i++) {
+        [NSThread sleepForTimeInterval:2];
+        NSLog(@"task3extra-%d---%@", i, [NSThread currentThread]);
+    }
+}];
+
+NSOperationQueue *queue = [[NSOperationQueue alloc] init];
+NSLog(@"add task 1");
+[queue addOperation:op1]; // [op1 start]
+NSLog(@"add task 2");
+[queue addOperation:op2]; // [op2 start]
+NSLog(@"add task 3");
+[queue addOperation:op3]; // [op3 start]
+
+/// Printed output
+// 2020-09-28 18:21:25 add task 1---<NSThread: 0x6000005c8900>{number = 1, name = main}
+// 2020-09-28 18:21:25 add task 2---<NSThread: 0x6000005c8900>{number = 1, name = main}
+// 2020-09-28 18:21:25 add task 3---<NSThread: 0x6000005c8900>{number = 1, name = main}
+// 2020-09-28 18:21:25 All Added---<NSThread: 0x6000005c8900>{number = 1, name = main}
+// 2020-09-28 18:21:27 task3extra-0---<NSThread: 0x6000005d9cc0>{number = 4, name = (null)}
+// 2020-09-28 18:21:27 task1-0---<NSThread: 0x600000589140>{number = 3, name = (null)}
+// 2020-09-28 18:21:27 task2-0---<NSThread: 0x600000588e40>{number = 6, name = (null)}
+// 2020-09-28 18:21:27 task3-0---<NSThread: 0x60000058a280>{number = 8, name = (null)}
+// 2020-09-28 18:21:29 task1-1---<NSThread: 0x600000589140>{number = 3, name = (null)}
+// 2020-09-28 18:21:29 task2-1---<NSThread: 0x600000588e40>{number = 6, name = (null)}
+// 2020-09-28 18:21:29 task3extra-1---<NSThread: 0x6000005d9cc0>{number = 4, name = (null)}
+// 2020-09-28 18:21:29 task3-1---<NSThread: 0x60000058a280>{number = 8, name = (null)}
 ```
