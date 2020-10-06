@@ -74,6 +74,7 @@ dispatch_queue_t queue = dispatch_queue_create("net.bujige.testQueue", DISPATCH_
 dispatch_queue_t queue = dispatch_get_main_queue();
 ```
 - Or we could use dispatch_get_global_queue() method to get Global Dispatch Queue.
+    - >Returns a system-defined global concurrent queue with the specified quality-of-service class.
 ```objective-c
 // How to get Global Dispatch Queue
 dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
