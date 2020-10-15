@@ -168,6 +168,7 @@ NSLog(@"add task 2");
 [queue addOperation:op2]; // [op2 start]
 NSLog(@"add task 3");
 [queue addOperation:op3]; // [op3 start]
+NSLog(@"All Added");
 
 /// Printed output
 // 2020-09-28 18:21:25 add task 1---<NSThread: 0x6000005c8900>{number = 1, name = main}
@@ -183,3 +184,60 @@ NSLog(@"add task 3");
 // 2020-09-28 18:21:29 task3extra-1---<NSThread: 0x6000005d9cc0>{number = 4, name = (null)}
 // 2020-09-28 18:21:29 task3-1---<NSThread: 0x60000058a280>{number = 8, name = (null)}
 ```
+2. -(void)addOperationWithBlock:(void(^)(void))block;
+    - Don't need to create NSOperation at all, will add the block into Operation Queue and add the block into Thread.
+```
+NSOperationQueue *queue = [[NSOperationQueue alloc] init];
+NSLog(@"add task 1---%@", [NSThread currentThread]);
+[queue addOperationWithBlock:^{
+    for (int i = 0; i < 2; i++) {
+        [NSThread sleepForTimeInterval:2];
+        NSLog(@"task1-%d---%@", i, [NSThread currentThread]);
+    }
+}];
+NSLog(@"add task 2---%@", [NSThread currentThread]);
+[queue addOperationWithBlock:^{
+    for (int i = 0; i < 2; i++) {
+        [NSThread sleepForTimeInterval:2];
+        NSLog(@"task2-%d---%@", i, [NSThread currentThread]);
+    }
+}];
+NSLog(@"add task 3---%@", [NSThread currentThread]);
+[queue addOperationWithBlock:^{
+    for (int i = 0; i < 2; i++) {
+        [NSThread sleepForTimeInterval:2];
+        NSLog(@"task3-%d---%@", i, [NSThread currentThread]);
+    }
+}];
+NSLog(@"All Added---%@", [NSThread currentThread]);
+
+
+/// Printed output
+// 2020-10-15 13:08:09 add task 1---<NSThread: 0x600000408900>{number = 1, name = main}
+// 2020-10-15 13:08:09 add task 2---<NSThread: 0x600000408900>{number = 1, name = main}
+// 2020-10-15 13:08:09 add task 3---<NSThread: 0x600000408900>{number = 1, name = main}
+// 2020-10-15 13:08:09 All Added---<NSThread: 0x600000408900>{number = 1, name = main}
+// 2020-10-15 13:08:11 task2-0---<NSThread: 0x60000041e540>{number = 7, name = (null)}
+// 2020-10-15 13:08:11 task1-0---<NSThread: 0x600000407000>{number = 4, name = (null)}
+// 2020-10-15 13:08:11 task3-0---<NSThread: 0x60000045d100>{number = 8, name = (null)}
+// 2020-10-15 13:08:13 task1-1---<NSThread: 0x600000407000>{number = 4, name = (null)}
+// 2020-10-15 13:08:13 task3-1---<NSThread: 0x60000045d100>{number = 8, name = (null)}
+// 2020-10-15 13:08:13 task2-1---<NSThread: 0x60000041e540>{number = 7, name = (null)}
+```
+
+## Use NSOperationQueue to control Serial or Concurrent
+We are using **maxConcurrentOperationCount** to decide if NSOperationQueue is Serial or Concurrent.
+- By default, the value is -1, which means NSOperationQueue doesn't have control, every thing happened Concurrently.
+- If we set **maxConcurrentOperationCount** to 1, NSOperationQueue will process Serially.
+- If we set **maxConcurrentOperationCount** to a value higher than 1, NSOperationQueue will process concurrently. But this value should not higher than the limit of system (if the value is too big, system will adjust it automatically.)
+
+## Add Dependency to NSOperation
+- **-(void)addDependency:(NSOperation *)op**, add dependency to another operation from current operation. Current operation will always execute after another operation.
+- **-(void)removeDependency:(NSOperation *)op**, cancel a dependency.
+- **@property (readonly, copy) NSArray<NSOperation * > * dependencies**, returned all dependencies from current operation.
+
+## The Priority of NSOperation
+NSOperation provided property **queuePriority**,
+- **queuePriority** only works for NSOperations inserted into same NSOperationQueue.
+- By default, all new created NSOperation has **queuePriority** equal to **NSOperationQueuePiorityNormal**. 
+- **queuePriority** cannot over-write dependency, thus, if NSOperationA depends on NSOperationB, but NSOperationB has lower priority than NSOperationA, thus he NSOperationB will be executed first anyway.
