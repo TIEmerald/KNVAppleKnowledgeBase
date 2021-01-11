@@ -56,13 +56,21 @@ plain char *ptr = malloc(10); free(ptr); strcpy(ptr, "new"); -- SIGSEGV()
 plain int main(void) { main(); return 0; }; // SIGSEGV() 
 ```
 
-### SIGTRAP
+### EXC_BREAKPOINT (SIGTRAP) and EXC_BAD_INSTRUCTION (SIGILL)
 #### Definition
+In apple document, it said:
+> The breakpoint exception type indicates a trace trap interrupted the process. On ARM processors, this appears as EXC_BREAKPOINT (SIGTRAP). On x86_64 processors, this appears as EXC_BAD_INSTRUCTION (SIGILL).
+
+But in [GNU C Library - 24.2.1 Program Error Signals](http://www.gnu.org/software/libc/manual/html_node/Program-Error-Signals.html?spm=ata.13261165.0.0.6eb73b1985ysXa), it has further explanation about **SIGILL**.
+
 ```c
 #define SIGTRAP 5 /* trace trap (not reset when caught) */
+#define SIGILL 4 /* illegal instruction (not reset when caught) */
 ``` 
 
 #### The Reason Cuased the SIGTRAP
+- Swift runtime uses trace traps for specific types of unrecoverable errors - [Addressing Crashes from Swift Runtime Errors](https://developer.apple.com/documentation/xcode/diagnosing_issues_using_crash_reports_and_device_logs/identifying_the_cause_of_common_crashes/addressing_crashes_from_swift_runtime_errors)
+- Some lower-level libraries, such as [Dispatch](https://developer.apple.com/documentation/dispatch), trap the process with this exception upon encountering an unrecoverable error and log additional information about the error in the Additional Diagnostic Information section of the crash report. ([Diagnostic Messages](https://developer.apple.com/documentation/xcode/diagnosing_issues_using_crash_reports_and_device_logs/examining_the_fields_in_a_crash_report#3582416)) 
 - Cause by __builtin_trap(). In DEBUG mode, it will trigger break point, otherwise it will crash and cause SIGTRAP()
 
 ### SIGBUS
@@ -80,14 +88,6 @@ Which means this similar to **SIGSEGV**, instead of be "an invalid access to val
 ```c
 plain int *pi = (int*)(0x00001111); *pi = 17; 
 ```
-
-### SIGILL
-#### Definition
-```c
-#define SIGILL 4 /* illegal instruction (not reset when caught) */
-``` 
-From The [GNU C Library - 24.2.1 Program Error Signals](http://www.gnu.org/software/libc/manual/html_node/Program-Error-Signals.html?spm=ata.13261165.0.0.6eb73b1985ysXa), it said:
-> The name of this signal is derived from “illegal instruction”; it usually means your program is trying to execute garbage or a privileged instruction. Since the C compiler generates only valid instructions, SIGILL typically indicates that the executable file is corrupted, or that you are trying to execute data. Some common ways of getting into the latter situation are by passing an invalid object where a pointer to a function was expected, or by writing past the end of an automatic array (or similar problems with pointers to automatic variables) and corrupting other data on the stack such as the return address of a stack frame.
 
 ### SIGKILL (UnCatched)
 #### The Reason Cuased the SIGKILL
