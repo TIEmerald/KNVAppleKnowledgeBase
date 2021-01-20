@@ -5,6 +5,9 @@
 [Objective-C Runtime References](https://developer.apple.com/documentation/objectivec/objective-c_runtime)
 
 [doesNotRecognizeSelector(_:) Document](https://developer.apple.com/documentation/objectivec/nsobject/1418637-doesnotrecognizeselector)
+
+[forwardInvocation: Document](https://developer.apple.com/documentation/objectivec/nsobject/1571955-forwardinvocation)
+
 ----
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
@@ -18,7 +21,9 @@ objc_msgSend(receiver, selector, arg1, arg2, ...)
 > The key to messaging lies in the structures that the compiler builds for each class and object. Every class structure includes **these two essential elements**:
 > 1. A pointer to the superclass.
 > 2. A class dispatch table. This table has entries that associate method selectors with the class-specific addresses of the methods they identify.
+
 > When a new object is created, memory for it is allocated, and its instance variables are initialized. First among the object's variables is a pointer to its class structure. This pointer, called **isa**, gives the object access to its class and, through the class, to all the classes it inherits from.
+
 > Whe a message is sent to an object, the messaging function follows the object's isa pointer to the class structure where it looks up the method selector in the dispatch table. If it can't find the selector there, objec_msgSend follows the pointer to the superclass and tries to find the selector in its dispatch table. Successive failures cause objc_msgSend to climb the class hierarchy until it reaches the NSObject class. Once it locates the selector, the function calls the method entered in the table and passes it the receiving object's data structure.
 
 ## Messaging Forwarding
@@ -33,6 +38,8 @@ objc_msgSend(receiver, selector, arg1, arg2, ...)
         [super forwardInvocation:anInvocation];
 }
 ```
+
+> **Note:** The message that’s forwarded must have a fixed number of arguments; variable numbers of arguments (in the style of printf()) are not supported.
 
 > **Note:** The forwardInvocation: method gets to handle messages only if they don't invoke an existing method in the nominal receiver. If, for example, you want your object to forward negotiate messages to another object, it can't have a negotiate method of its own. If it does, the message will never reach forwardInvocation:
 
