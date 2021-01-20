@@ -8,6 +8,10 @@
 
 [forwardInvocation: Document](https://developer.apple.com/documentation/objectivec/nsobject/1571955-forwardinvocation)
 
+[resolveInstanceMethod(_:) Document](https://developer.apple.com/documentation/objectivec/nsobject/1418500-resolveinstancemethod)
+
+[forwardingTarget(for:)](https://developer.apple.com/documentation/objectivec/nsobject/1418855-forwardingtarget)
+
 ----
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
@@ -70,3 +74,34 @@ objc_msgSend(receiver, selector, arg1, arg2, ...)
     [self doesNotrecognizeSelector:_cmd];
 }
 ```
+
+## resolveInstanceMethod(_:)
+> Dynamically provides an implementation for a given selector for an instance method.
+
+> This method and __resolveClassMethod(_:)__ allow you to dynamically provide an implementation for a given selector. An Objective-C method is simply a C function that take at least two arguments - self and _cmd. Using the __class_addMethod(_:_:_:_:)__ function, you can add a function to a class as a method.
+```objective-c
+void dynamicMethodIMP(id self, SEL _cmd)
+{
+    // implementation ....
+}
++ (BOOL) resolveInstanceMethod:(SEL)aSEL
+{
+    if (aSEL == @selector(resolveThisMethodDynamically))
+    {
+          class_addMethod([self class], aSEL, (IMP) dynamicMethodIMP, "v@:");
+          return YES;
+    }
+    return [super resolveInstanceMethod:aSel];
+}
+```
+
+> **Special Considerations** This method is called before the Objective-C forwarding mechanism is invoked. If __responds(to:)__ or __instancesRespond(to:)__ is invoked, the dynamic method resolver is given the opportunity to provide an IMP for the given selector first.
+
+## forwardingTarget(for:)
+> Returns the object to which unrecognized messages should first be directed.
+
+> This method gives an object a chance to redirect an unknown message sent to it before the much more expensive __forwardInvocation:__ machinery takes over. This is useful when you simply want to redirect messages to another object and can be an order of magnitude faster than regular forwarding. It is not useful where the goal of the forwarding is to capture the NSInvocation, or manipulate the arguments or return value during the forwarding.
+
+## General diagram about what will happen, if we cannot find message implementaiton in class structures.
+
+![The workflow of the message sending](messaging_diagram.jpg "The workflow of the message sending")
